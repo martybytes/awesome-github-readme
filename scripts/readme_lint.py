@@ -216,10 +216,16 @@ def section_key_of(heading_text: str) -> Optional[str]:
 _RE_FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})\s*([A-Za-z0-9_+#.-]*)")
 _RE_ATX = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
 _RE_HTML_H = re.compile(r"<h([1-6])\b[^>]*>(.*?)</h\1>", re.IGNORECASE | re.DOTALL)
-_RE_MD_IMG = re.compile(r"!\[([^\]]*)\]\(\s*<?([^)>\s]+)>?(?:\s+[\"'][^\"']*[\"'])?\s*\)")
-_RE_MD_LINK = re.compile(r"(?<!!)\[([^\]]*)\]\(\s*<?([^)>\s]+)>?(?:\s+[\"'][^\"']*[\"'])?\s*\)")
-_RE_REF_DEF = re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*(\S+)")
-_RE_REF_USE = re.compile(r"(?<!!)\[([^\]]+)\]\[([^\]]*)\]")
+# The {0,N} bounds are load-bearing, not cosmetic. Unbounded `[^\]]*` rescans to
+# the end of the input from every `[`, so a README containing a run of unclosed
+# brackets costs O(n^2) - 50k of them took 8.7s before these bounds, which is a
+# denial of service for a linter that runs on pull requests from strangers.
+# Nobody writes link text 500 characters long, so the bound costs nothing real.
+_LINK_TEXT = r"[^\]]{0,500}"
+_RE_MD_IMG = re.compile(r"!\[(" + _LINK_TEXT + r")\]\(\s*<?([^)>\s]{1,2000})>?(?:\s+[\"'][^\"']*[\"'])?\s*\)")
+_RE_MD_LINK = re.compile(r"(?<!!)\[(" + _LINK_TEXT + r")\]\(\s*<?([^)>\s]{1,2000})>?(?:\s+[\"'][^\"']*[\"'])?\s*\)")
+_RE_REF_DEF = re.compile(r"^\s{0,3}\[([^\]]{1,500})\]:\s*(\S+)")
+_RE_REF_USE = re.compile(r"(?<!!)\[([^\]]{1,500})\]\[([^\]]{0,500})\]")
 _RE_HTML_IMG = re.compile(r"<img\b([^>]*)>", re.IGNORECASE)
 _RE_HTML_A = re.compile(r"<a\b([^>]*)>(.*?)</a>", re.IGNORECASE | re.DOTALL)
 _RE_ATTR = re.compile(r"([A-Za-z_:][-A-Za-z0-9_:.]*)\s*=\s*[\"']([^\"']*)[\"']")
@@ -498,13 +504,29 @@ def hero_line_count(doc: Doc) -> int:
 
 
 def resolve_relative(doc: Doc, target: str) -> Optional[Path]:
+    """Resolve a relative link, or None if it is not a path inside this repo.
+
+    Confined to the repository root on purpose, and it is a correctness rule
+    before it is a safety one: GitHub serves relative links from the repository,
+    so `../../elsewhere` is already broken for every reader. Not walking out
+    also means a README written by a stranger cannot make CI stat arbitrary
+    paths on the runner and report back which ones exist.
+    """
     t = target.split("#", 1)[0].split("?", 1)[0]
     if not t:
         return None
     t = t.replace("\\", "/")
-    if t.startswith("/"):
-        return (doc.root / t.lstrip("/")).resolve()
-    return (doc.path.parent / t).resolve()
+    try:
+        if t.startswith("/"):
+            resolved = (doc.root / t.lstrip("/")).resolve()
+        else:
+            resolved = (doc.path.parent / t).resolve()
+        root = doc.root.resolve()
+    except (OSError, ValueError, RuntimeError):
+        return None
+    if resolved != root and root not in resolved.parents:
+        return None
+    return resolved
 
 
 def is_external(target: str) -> bool:
@@ -990,13 +1012,28 @@ def _mec_relative(doc: Doc, cfg: Config) -> List[Finding]:
         t = link.target
         if not t or is_external(t) or t.startswith("#") or t.startswith("mailto:"):
             continue
+        # Deduplicate BEFORE touching the filesystem: a README that references
+        # the same path a thousand times should cost one stat, not a thousand.
+        if t in seen:
+            continue
+        seen.add(t)
         p = resolve_relative(doc, t)
-        if p is None or p.exists():
+        if p is None:
+            # Resolved outside the repository. GitHub serves relative links from
+            # the repo, so this is already broken for every reader.
+            out.append(Finding(
+                "MEC001", ERROR,
+                "Link points outside the repository: %s" % t, line=link.line,
+                fix="GitHub cannot serve it. Use a path inside the repo, or an "
+                    "absolute URL."))
             continue
-        key = t
-        if key in seen:
+        try:
+            if p.exists():
+                continue
+        except OSError:
+            # A path too long or otherwise unopenable for this OS is not a
+            # finding worth reporting - it is not a link anyone typed.
             continue
-        seen.add(key)
         out.append(Finding("MEC001", ERROR, "Dead relative link: %s" % t,
                            line=link.line, fix="Fix the path or create the file."))
     return out

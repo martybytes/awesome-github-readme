@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -595,3 +596,82 @@ def test_project_install_writes_a_valid_config(tmp_path):
                         .read_text(encoding="utf-8"))
     allowed = set(schema["properties"])
     assert set(cfg) <= allowed, set(cfg) - allowed
+
+
+# ---------------------------------------------------------------------------
+# Hostile input
+# ---------------------------------------------------------------------------
+
+
+# Bodies are built lazily and identified by name: a parametrize carrying a
+# 2 MB string inline puts that string in every test id pytest prints.
+HOSTILE = {
+    "unclosed-brackets": lambda: "[" * 50000,
+    "atx-heading-of-hashes": lambda: "# " + "#" * 50000,
+    "unterminated-html-anchor": lambda: '<a href="x">' + "a" * 200000,
+    "unterminated-fence": lambda: "```\n" + ("x" * 200 + "\n") * 5000,
+    "one-very-long-line": lambda: "z" * 2_000_000,
+    "repeated-dead-link": lambda: "# t\n\n" + "[a](nope.md) " * 20000,
+}
+
+
+@pytest.mark.parametrize("name", sorted(HOSTILE))
+def test_pathological_input_stays_fast(tmp_path, name):
+    r"""CI lints READMEs written by strangers, so input cost has to be bounded.
+
+    Unbounded `[^\]]*` rescanned to the end of the input from every `[`: 50k
+    unclosed brackets cost 8.7s before the character classes were bounded, and a
+    README naming the same missing file 20k times cost 20k stat calls.
+    """
+    p = tmp_path / "README.md"
+    p.write_text(HOSTILE[name](), encoding="utf-8")
+    start = time.perf_counter()
+    rl.run(rl.parse(p, tmp_path), rl.Config(root=tmp_path))
+    elapsed = time.perf_counter() - start
+    assert elapsed < 3.0, "%s took %.2fs" % (name, elapsed)
+
+
+def test_link_dedupe_makes_one_stat_per_target(tmp_path, monkeypatch):
+    calls = []
+    real_exists = Path.exists
+
+    def counting_exists(self, *a, **kw):
+        calls.append(str(self))
+        return real_exists(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "exists", counting_exists)
+    text = "# t\n\n" + "[a](same.md) " * 500 + "[b](other.md)\n"
+    report = lint(text, tmp_path)
+    probed = [c for c in calls if c.endswith(("same.md", "other.md"))]
+    assert len(probed) == 2, probed
+    assert len([f for f in report.findings if f.rule == "MEC001"]) == 2
+
+
+def test_links_outside_the_repo_are_reported_not_probed(tmp_path, monkeypatch):
+    """A README from a stranger must not make CI stat arbitrary paths.
+
+    GitHub serves relative links from the repository, so a link that walks out
+    is broken for every reader anyway - reporting it is the correct behaviour
+    and the safe one at the same time.
+    """
+    probed = []
+    real_exists = Path.exists
+
+    def counting_exists(self, *a, **kw):
+        probed.append(str(self))
+        return real_exists(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "exists", counting_exists)
+    report = lint("# t\n\n[a](../../../etc/passwd) [b](../outside.md)\n", tmp_path)
+    findings = [f for f in report.findings if f.rule == "MEC001"]
+    assert len(findings) == 2
+    assert all("outside the repository" in f.message for f in findings)
+    assert not [p for p in probed if "etc" in p or "outside.md" in p], probed
+
+
+def test_links_inside_the_repo_still_resolve(tmp_path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("x", encoding="utf-8")
+    (tmp_path / "README.md").write_text("x", encoding="utf-8")
+    report = lint("# t\n\n[a](docs/a.md) [b](./docs/a.md) [c](/docs/a.md)\n", tmp_path)
+    assert "MEC001" not in rule_ids(report)

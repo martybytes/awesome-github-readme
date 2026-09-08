@@ -17,6 +17,7 @@
   <a href="#quickstart">Quickstart</a> &middot;
   <a href="docs/SPEC.md">The pattern</a> &middot;
   <a href="docs/rubric.md">Rubric</a> &middot;
+  <a href="SECURITY.md">Security</a> &middot;
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
@@ -83,6 +84,9 @@ cannot. Nothing here is specific to a language, a framework or a project shape.
 - [Quickstart](#quickstart)
 - [Configuring](#configuring)
 - [What you get](#what-you-get)
+- [Continuous integration](#continuous-integration)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
 - [How it works](#how-it-works)
 - [Development](#development)
 - [Layout](#layout)
@@ -325,9 +329,103 @@ blocks a commit on somebody else's machine is a linter people uninstall.
   why the recording has to be reproducible from a committed script.
 - **[antipatterns.md](docs/antipatterns.md)** — twelve common ones, each with the
   reader it costs.
+- **[ci.md](docs/ci.md)** — gates, exit codes, the JSON contract, and recipes for
+  Actions, GitLab, Azure and `pre-commit`.
+- **[SECURITY.md](SECURITY.md)** — the full threat model and the hardening
+  checklist.
 - **[templates/](templates/)** — six starting READMEs, one per profile, plus a
   commented `demo.tape`.
 </details>
+
+## Continuous integration
+
+The linter is one dependency-free file that exits non-zero on demand, so the
+YAML is two lines on any platform. The part worth thinking about is the gate.
+
+| Exit | Means |
+|---|---|
+| `0` | ran, and did not fail a gate — **the default, always, whatever it found** |
+| `1` | `--strict` saw an `error` finding, or the score is under `--min-score` |
+| `2` | could not run: no such file, or `--explain` named an unknown rule |
+
+Turning on `--strict` in an existing repository fails the first build and
+teaches everyone to add `|| true`. Ratchet instead: run it advisory for a
+fortnight, then set `min_score` to whatever you score today — so the build fails
+only if the README gets *worse* — and raise the floor as it climbs. Most
+repositories should stop there. `--strict` is for the ones where a broken README
+is a shipped defect.
+
+```yaml
+permissions:
+  contents: read        # the job needs nothing else
+jobs:
+  readme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.x' }
+      - run: python tools/readme_lint.py README.md --no-colour --min-score 80
+      - run: python tools/readme_toc.py --check
+      - run: python tools/readme_badges.py --check
+```
+
+`install.py --project . --ci` writes a working version of that. It fetches the
+linter with `curl` for convenience; **vendoring the file into your repo instead
+is one commit and removes a supply-chain dependency** — see
+[SECURITY.md](SECURITY.md#supply-chain).
+
+`--json` emits one record — score, grade, per-category weights, and every
+finding with its line and its fix — which is the interface for a PR comment, a
+dashboard, or scoring every README in a monorepo.
+[docs/ci.md](docs/ci.md) has GitLab, Azure, `pre-commit`, the JSON schema and a
+PR-comment job that keeps the gate on `contents: read`.
+
+## Security
+
+This runs on every file edit and before every commit, and its CI job lints
+READMEs written by strangers. So, plainly:
+
+- **No network access, in any script.** Nothing is uploaded, no telemetry, and
+  badge URLs are compared against the working tree rather than fetched. Verify
+  it yourself: `grep -rE '^\s*(import|from)\s+(urllib|http|socket|requests)' scripts/`
+- **One subprocess, and it is `git`** — `git -C <root> remote get-url origin`,
+  passed as an argument list with a timeout, never a shell string.
+- **It reads four things**: the README, `.awesome-readme.json`, your package
+  manifest, and the *filenames* in `.github/workflows/`. Links are checked with
+  `exists()` and never opened.
+- **Link resolution is confined to the repository**, so a README from a stranger
+  cannot make your runner stat arbitrary paths and report which ones exist. That
+  is also just correct — GitHub cannot serve `../../elsewhere` either.
+- **Input cost is bounded.** Unbounded link regexes let 50k unclosed brackets
+  cost 8.7 s; the capped classes make it 0.18 s, and
+  `test_pathological_input_stays_fast` keeps it there.
+- **Only `install.py` writes outside its own directory.** It merges into
+  `settings.json` after a dated backup, touching only entries tagged
+  `"_source": "awesome-github-readme"`, so your other hooks survive and
+  `--uninstall` removes exactly what it added. `--dry-run` shows you first.
+- **Every hook exits 0 silently on an unexpected failure**, because a linter that
+  breaks your session over its own bug is worse than no linter. Kill them
+  outright with `AWESOME_README_HOOKS=0`.
+
+The one place this project can block an action is `PreToolUse` in strict mode,
+and only for a repository that asked for it in a file it committed.
+
+Full threat model, the hardening checklist, and how to report something:
+[SECURITY.md](SECURITY.md).
+
+## Troubleshooting
+
+| Symptom | Cause |
+|---|---|
+| Skills do not appear after `--user` | Start a new session; skills load at startup. `install.py --status` shows what is installed |
+| `symlink unavailable` on Windows | `--link` needs Developer Mode. It falls back to copying, which works — you just re-run the installer to update |
+| The hook says nothing on a good README | Working as intended. `PostToolUse` is silent above 95 with no errors |
+| Score dropped after adding a doc link | `MEC001` resolves relative links against the working tree. A link to a file you have not committed yet is a dead link to everyone else |
+| `SEC001` demands sections you do not want | Wrong profile. `library`, `service`, `app`, `docs` and `minimal` each require a different set |
+| A rule is wrong for your project | Put it in `disable` in `.awesome-readme.json`. In the config, where the next person can see the decision |
+| CI fails but local passes | Check `min_score` in `.awesome-readme.json` — CI reads the same file, so the gate is usually a floor you set and forgot |
 
 ## How it works
 
@@ -377,7 +475,7 @@ awesome-github-readme/
 ├── skills/           five Claude Code skills, one directory each
 ├── agents/           the readme-reviewer subagent
 ├── hooks/            hook registrations for the plugin install
-├── docs/             the written pattern, and the generated rubric
+├── docs/             the written pattern, the CI recipes, the generated rubric
 ├── templates/        six profile READMEs and a commented demo.tape
 ├── schema/           JSON Schema for .awesome-readme.json
 └── tests/            pytest suite, including the calibration fixtures
@@ -385,7 +483,8 @@ awesome-github-readme/
 
 `docs/rubric.md` is generated — `python3 scripts/readme_lint.py --rules` — and
 CI fails if it has drifted from the rule definitions. `scripts/` is the only
-directory with executable content; everything else is Markdown and JSON.
+directory with executable content; everything else is Markdown and JSON, which
+is what makes [the security surface](SECURITY.md) small enough to state in full.
 
 ## License
 
