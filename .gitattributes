@@ -1,0 +1,33 @@
+# Enforce LF in the working tree on every platform, not just in the index.
+#
+# `core.autocrlf=true` on Windows checks text files out as CRLF, and two things
+# in this repository are executed rather than read:
+#
+#   - `install.py --project --git-hook` writes `.githooks/pre-commit`, a POSIX
+#     `sh` script. Under WSL or Git Bash a CRLF shebang line fails with
+#     `bad interpreter: /bin/sh^M`, which is an error message that names the
+#     wrong problem and costs an hour.
+#   - `templates/demo.tape` is fed to Charm VHS, which runs on Unix.
+#
+# CI also lints this tree on Ubuntu and macOS, so a CRLF checkout here would be
+# a difference between platforms in a project whose central claim is that there
+# is none.
+* text=auto eol=lf
+
+# Known binaries - never normalize, never diff as text.
+*.gif binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary
+
+# Generated from the rule definitions by `readme_lint.py --rules`; CI fails if
+# it has drifted. Marking it generated collapses it in diffs and keeps it out of
+# language statistics, where it would otherwise misreport the repo as Markdown.
+docs/rubric.md linguist-generated=true
+
+# The profile READMEs and the tape are templates full of {{PLACEHOLDER}} text.
+# They are documentation, not the project's own prose.
+templates/** linguist-documentation=true
