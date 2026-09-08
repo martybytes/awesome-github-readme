@@ -140,6 +140,19 @@ _SLUG_STRIP = re.compile(r"[^\w\- ]", re.UNICODE)
 _MD_INLINE = re.compile(r"(\*\*|__|\*|_|`|~~)")
 
 
+def write_text_lf(path: Path, text: str) -> None:
+    """Write with LF endings whatever the platform.
+
+    `Path.write_text` translates "\n" to `os.linesep`, so on Windows every
+    file this project generates would come out CRLF - including
+    `.githooks/pre-commit`, a POSIX `sh` script whose CRLF shebang fails as
+    `bad interpreter: /bin/sh^M`. .gitattributes governs what git checks out,
+    not what Python writes, so the fix has to be here as well as there.
+    """
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
 def github_slug(text: str) -> str:
     """GitHub's heading -> anchor rule: lowercase, drop punctuation, spaces to hyphens."""
     t = re.sub(r"<[^>]+>", "", text)

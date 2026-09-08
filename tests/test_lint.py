@@ -675,3 +675,41 @@ def test_links_inside_the_repo_still_resolve(tmp_path):
     (tmp_path / "README.md").write_text("x", encoding="utf-8")
     report = lint("# t\n\n[a](docs/a.md) [b](./docs/a.md) [c](/docs/a.md)\n", tmp_path)
     assert "MEC001" not in rule_ids(report)
+
+
+# ---------------------------------------------------------------------------
+# Line endings
+# ---------------------------------------------------------------------------
+
+
+def test_generated_files_use_lf_on_every_platform(tmp_path):
+    """.gitattributes governs checkout, not what Python writes.
+
+    `Path.write_text` translates to os.linesep, so on Windows every generated
+    file came out CRLF - including .githooks/pre-commit, whose CRLF shebang
+    fails as `bad interpreter: /bin/sh^M`. A fresh clone looked clean and the
+    installer still produced a broken hook.
+    """
+    import install  # noqa: E402
+
+    install.do_project(tmp_path, "cli", strict=False, min_score=0,
+                       ci=True, git_hook=True, dry=False)
+    generated = [
+        tmp_path / ".githooks" / "pre-commit",
+        tmp_path / ".github" / "workflows" / "readme.yml",
+        tmp_path / ".awesome-readme.json",
+        tmp_path / ".claude" / "settings.json",
+    ]
+    for path in generated:
+        raw = path.read_bytes()
+        assert b"\r\n" not in raw, "%s was written with CRLF" % path.name
+
+    shebang = (tmp_path / ".githooks" / "pre-commit").read_bytes().split(b"\n", 1)[0]
+    assert not shebang.endswith(b"\r"), "CRLF shebang breaks the hook under sh"
+
+
+def test_toc_write_keeps_lf(tmp_path):
+    p = tmp_path / "README.md"
+    p.write_bytes(b"# t\n\n## Install\n\n## License\n")
+    assert readme_toc.main([str(p), "--write"]) == 0
+    assert b"\r\n" not in p.read_bytes()

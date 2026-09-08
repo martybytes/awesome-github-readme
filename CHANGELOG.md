@@ -16,6 +16,8 @@ follows [semantic versioning](https://semver.org/spec/v2.0.0.html).
   Azure, Make and `pre-commit`, the `--json` contract, and a PR-comment job that
   keeps the gate on `contents: read`.
 - README sections for continuous integration, security and troubleshooting.
+- `.gitattributes` pinning LF in the working tree, marking the image fixtures
+  binary and flagging `docs/rubric.md` as generated.
 
 ### Fixed
 
@@ -27,6 +29,12 @@ follows [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - **`MEC001` stat storm.** Link targets are now deduplicated before the
   filesystem call, so a README naming the same missing file 20,000 times costs
   one `exists()` rather than 20,000.
+- **Generated files came out CRLF on Windows.** `Path.write_text` translates to
+  `os.linesep`, so `install.py` wrote `.githooks/pre-commit` with a CRLF
+  shebang, which fails under `sh` as `bad interpreter: /bin/sh^M`.
+  `.gitattributes` governs what git checks out, not what Python writes, so a
+  fresh clone looked clean while the installer still produced a broken hook.
+  Every generation site now writes LF explicitly.
 - **Link resolution escaped the repository.** `../../../etc/passwd` was resolved
   and probed; it is now reported as a finding instead. Correct as well as safe —
   GitHub serves relative links from the repository, so such a link is broken for

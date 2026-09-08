@@ -29,7 +29,8 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from readme_lint import Doc, Heading, github_slug, parse, find_root  # noqa: E402
+from readme_lint import (Doc, Heading, github_slug, parse, find_root,  # noqa: E402
+                         write_text_lf)
 
 BEGIN = "<!-- toc -->"
 END = "<!-- /toc -->"
@@ -158,7 +159,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if changed:
-        target.write_text(new_text, encoding="utf-8")
+        write_text_lf(target, new_text)
         print("readme-toc: updated %s (%d entries)" % (target, len(entries)))
     else:
         print("readme-toc: %s already current" % target)

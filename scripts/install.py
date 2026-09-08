@@ -76,7 +76,20 @@ def write_json(path: Path, data: dict, dry: bool) -> None:
         say("would write %s" % path)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    write_text_lf(path, text)
+
+
+def write_text_lf(path: Path, text: str) -> None:
+    """Write with LF endings whatever the platform.
+
+    `Path.write_text` translates "\n" to `os.linesep`, so on Windows every
+    file this project generates would come out CRLF - including
+    `.githooks/pre-commit`, a POSIX `sh` script whose CRLF shebang fails as
+    `bad interpreter: /bin/sh^M`. .gitattributes governs what git checks out,
+    not what Python writes, so the fix has to be here as well as there.
+    """
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
 
 
 def python_cmd() -> str:
@@ -348,7 +361,7 @@ def do_project(root: Path, profile: str, strict: bool, min_score: int,
                     encoding="utf-8", errors="replace"):
                 say("%s exists and is not ours - left alone" % target, "warn")
             else:
-                target.write_text(GITHOOK % lint_path, encoding="utf-8")
+                write_text_lf(target, GITHOOK % lint_path)
                 target.chmod(target.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP)
                 say(".githooks/pre-commit written", "add")
                 say("enable it: git config core.hooksPath .githooks")
@@ -369,7 +382,7 @@ def do_project(root: Path, profile: str, strict: bool, min_score: int,
             say("%s exists - left alone" % wf.name, "skip")
         else:
             wf.parent.mkdir(parents=True, exist_ok=True)
-            wf.write_text(body, encoding="utf-8")
+            write_text_lf(wf, body)
             say(".github/workflows/readme.yml written", "add")
 
     print("")
