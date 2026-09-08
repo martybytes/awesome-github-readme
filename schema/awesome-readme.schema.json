@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/martybytes/awesome-github-readme/main/schema/awesome-readme.schema.json",
+  "title": "awesome-readme configuration",
+  "description": "Per-repository rubric settings for readme-lint. Place at the repository root as .awesome-readme.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string",
+      "enum": [
+        "cli",
+        "library",
+        "service",
+        "app",
+        "docs",
+        "minimal"
+      ],
+      "default": "cli",
+      "description": "Which set of sections a reader of this kind of project expects."
+    },
+    "strict": {
+      "type": "boolean",
+      "default": false,
+      "description": "Turn the advisory commit check into a blocking gate."
+    },
+    "min_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0,
+      "description": "Score below which the linter exits non-zero. 0 disables the floor."
+    },
+    "disable": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z]{3}[0-9]{3}$"
+      },
+      "description": "Rule ids to skip, e.g. [\"HERO005\", \"DEP004\"]."
+    },
+    "require": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "contents",
+          "what",
+          "requirements",
+          "install",
+          "quickstart",
+          "config",
+          "features",
+          "architecture",
+          "development",
+          "layout",
+          "faq",
+          "security",
+          "changelog",
+          "license",
+          "demo",
+          "acknowledgements"
+        ]
+      },
+      "description": "Sections this repository requires on top of its profile's set."
+    },
+    "allow_badges": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Substrings of badge URLs exempted from the vanity-badge rule."
+    },
+    "check_links": {
+      "type": "boolean",
+      "default": true,
+      "description": "Resolve relative links against the working tree."
+    },
+    "session_summary": {
+      "type": "boolean",
+      "default": false,
+      "description": "Report the README score once at the start of a Claude Code session."
+    }
+  }
+}

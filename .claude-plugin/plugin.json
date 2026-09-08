@@ -1,0 +1,25 @@
+{
+  "name": "awesome-github-readme",
+  "displayName": "Awesome GitHub README",
+  "version": "1.0.0",
+  "description": "Write, audit and maintain READMEs that earn a reader's second minute. A scored rubric, five skills, advisory hooks and a template library, generic to any language or project shape.",
+  "author": {
+    "name": "martybytes",
+    "url": "https://github.com/martybytes"
+  },
+  "homepage": "https://github.com/martybytes/awesome-github-readme",
+  "repository": "https://github.com/martybytes/awesome-github-readme",
+  "license": "MIT",
+  "keywords": [
+    "readme",
+    "documentation",
+    "markdown",
+    "linter",
+    "badges",
+    "open-source",
+    "developer-experience"
+  ],
+  "skills": "./skills/",
+  "agents": ["./agents/"],
+  "hooks": "./hooks/hooks.json"
+}

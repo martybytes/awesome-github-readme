@@ -1,0 +1,27 @@
+{
+  "name": "martybytes",
+  "owner": {
+    "name": "martybytes",
+    "url": "https://github.com/martybytes"
+  },
+  "metadata": {
+    "description": "Reusable Claude Code plugins extracted from working repositories.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "awesome-github-readme",
+      "source": "./",
+      "description": "Write, audit and maintain READMEs that earn a reader's second minute.",
+      "version": "1.0.0",
+      "category": "documentation",
+      "keywords": [
+        "readme",
+        "documentation",
+        "markdown",
+        "linter",
+        "badges"
+      ]
+    }
+  ]
+}

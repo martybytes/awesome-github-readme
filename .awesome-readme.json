@@ -1,0 +1,10 @@
+{
+  "$schema": "schema/awesome-readme.schema.json",
+  "profile": "cli",
+  "strict": false,
+  "min_score": 90,
+  "disable": [],
+  "require": [],
+  "allow_badges": [],
+  "session_summary": false
+}
