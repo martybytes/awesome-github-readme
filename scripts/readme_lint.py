@@ -494,6 +494,8 @@ _LEAD_VERBS = re.compile(
 
 def is_badge(img: Image) -> bool:
     src = (img.src or "").lower()
+    if re.search(r"/actions/workflows/[^/]+/badge\.svg", src):
+        return True  # GitHub's native Actions badge; renders for private repos
     return any(h in src for h in BADGE_HOSTS)
 
 
@@ -1152,6 +1154,7 @@ def _mec_bare_urls(doc: Doc, cfg: Config) -> List[Finding]:
     for i, line in enumerate(doc.prose_lines, start=1):
         if line.lstrip().startswith(("[", "|")) or "](" in line or "href=" in line:
             continue
+        line = re.sub(r"`[^`]*`", "", line)  # a URL in a code span is literal
         for m in re.finditer(r"(?<![(<\"'\w])https?://[^\s)>\"'\],]+", line):
             url = m.group(0)
             if url in linked:

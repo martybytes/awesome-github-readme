@@ -713,3 +713,20 @@ def test_toc_write_keeps_lf(tmp_path):
     p.write_bytes(b"# t\n\n## Install\n\n## License\n")
     assert readme_toc.main([str(p), "--write"]) == 0
     assert b"\r\n" not in p.read_bytes()
+
+
+def test_github_native_actions_badge_counts_as_a_badge(tmp_path):
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text("on: push\n")
+    text = ('# x\n\n<a href="https://github.com/o/r/actions/workflows/ci.yml">'
+            '<img alt="CI" src="https://github.com/o/r/actions/workflows/ci.yml/badge.svg"></a>\n')
+    ids = rule_ids(lint(text, tmp_path))
+    assert "HERO003" not in ids
+    assert "TRU004" not in ids
+
+
+def test_url_inside_code_span_is_not_bare(tmp_path):
+    text = "# x\n\nIt registers `http://127.0.0.1:53682/callback` for redirects.\n"
+    assert "MEC007" not in rule_ids(lint(text, tmp_path))
+    text = "# x\n\nSee http://example.com/page for more.\n"
+    assert "MEC007" in rule_ids(lint(text, tmp_path))
