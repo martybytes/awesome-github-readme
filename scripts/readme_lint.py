@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Set
 from urllib.parse import unquote
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 ERROR = "error"
 WARN = "warn"

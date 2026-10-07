@@ -155,7 +155,7 @@ audit, no transitive package to be compromised, and nothing that `pip install`
 can substitute.
 
 The Actions this project's own CI uses are pinned by major version
-(`actions/checkout@v4`, `actions/setup-python@v5`). Pin them by commit SHA if
+(`actions/checkout@v7`, `actions/setup-python@v7`). Pin them by commit SHA if
 your threat model calls for it.
 
 ## Hardening checklist

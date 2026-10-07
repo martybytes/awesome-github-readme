@@ -6,6 +6,8 @@ follows [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-07
+
 ### Added
 
 - `SECURITY.md` — the full threat model: what the scripts read, the `git`
@@ -37,6 +39,9 @@ follows [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - `MEC006` no longer flags ```` ```console ```` blocks, which is the tag its fix
   recommends.
 - The hook no longer lints `README.rst` or a bare `README` as Markdown.
+- CI, the `--ci` workflow and the documented recipes use `actions/checkout@v7`
+  and `actions/setup-python@v7`, which run on Node 24; the v4/v5 pair ran on
+  the deprecated Node 20.
 
 ### Fixed
 
@@ -118,5 +123,6 @@ the reference implementation and scores 98 against the rubric it produced.
 - Six profile templates and a commented `demo.tape`.
 - JSON Schema for `.awesome-readme.json`.
 
-[Unreleased]: https://github.com/martybytes/awesome-github-readme/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/martybytes/awesome-github-readme/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/martybytes/awesome-github-readme/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/martybytes/awesome-github-readme/releases/tag/v1.0.0

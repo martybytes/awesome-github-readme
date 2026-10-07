@@ -366,8 +366,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: '3.x' }
       - run: python tools/readme_lint.py README.md --no-colour --min-score 80
       - run: python tools/readme_toc.py --check

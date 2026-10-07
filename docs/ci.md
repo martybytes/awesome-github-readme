@@ -81,8 +81,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.x'
       - run: python tools/readme_lint.py README.md --no-colour --min-score 80
@@ -96,7 +96,7 @@ time. Pin a tag rather than `main`:
         run: |
           mkdir -p .readme-tools
           curl -fsSL -o .readme-tools/readme_lint.py \
-            https://raw.githubusercontent.com/martybytes/awesome-github-readme/v1.0.0/scripts/readme_lint.py
+            https://raw.githubusercontent.com/martybytes/awesome-github-readme/v1.1.0/scripts/readme_lint.py
       - run: python .readme-tools/readme_lint.py README.md --no-colour --min-score 80
 ```
 
@@ -189,7 +189,7 @@ above, because it is the thing people run before pushing.
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "path": "README.md",
   "profile": "cli",
   "score": 74,
@@ -247,8 +247,8 @@ Compose it instead, from a job that already has the permission it needs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: '3.x' }
       - id: lint
         run: |

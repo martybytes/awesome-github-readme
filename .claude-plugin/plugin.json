@@ -1,7 +1,7 @@
 {
   "name": "awesome-github-readme",
   "displayName": "Awesome GitHub README",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Write, audit and maintain READMEs that earn a reader's second minute. A scored rubric, five skills, advisory hooks and a template library, generic to any language or project shape.",
   "author": {
     "name": "martybytes",
