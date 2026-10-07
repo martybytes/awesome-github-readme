@@ -14,6 +14,10 @@ four the code genuinely cannot answer.
 `$TOOLKIT` is `${CLAUDE_PLUGIN_ROOT}/scripts` (plugin install) or the `scripts/`
 directory beside this `SKILL.md` (user install).
 
+Docs are in `$TOOLKIT/../docs/` and templates in `$TOOLKIT/../templates/`.
+The commands below say `python3`; where that is missing, as it often is on
+Windows, use `python` or `py -3`.
+
 ## 1. Read the repository first
 
 Do this before asking anything.
@@ -73,8 +77,8 @@ than a missing one, because it implies the answer exists somewhere.
 
 ## 4. Write it
 
-Follow [SPEC.md](../../docs/SPEC.md) block by block and
-[voice.md](../../docs/voice.md) for the sentences. The four that decide whether
+Follow `$TOOLKIT/../docs/SPEC.md` block by block and
+`$TOOLKIT/../docs/voice.md` for the sentences. The four that decide whether
 the rest gets read:
 
 **The tagline.** One sentence carrying three things: what it is, where it
@@ -113,7 +117,7 @@ fabricate a screenshot or an ASCII mock-up.
 - **App**: ask for two screenshots, light and dark, and wire up the `<picture>`
   block.
 
-[visuals.md](../../docs/visuals.md) has the details.
+`$TOOLKIT/../docs/visuals.md` has the details.
 
 ## 6. Check it, then commit the standard
 
@@ -141,4 +145,4 @@ python3 $TOOLKIT/install.py --project . --profile <profile>
 - **Write a section because the template has it.** Delete what the project does
   not have.
 - **Reach for adjectives.** If a sentence would fit any competitor's README
-  unchanged, it is not carrying information. See [voice.md](../../docs/voice.md).
+  unchanged, it is not carrying information. See `$TOOLKIT/../docs/voice.md`.

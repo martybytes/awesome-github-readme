@@ -99,8 +99,8 @@ points are suggestions, not defects.
 { "disable": ["HERO005", "DEP004"] }
 ```
 
-in `.awesome-readme.json`. Disabled rules leave the denominator too, so the
-score stays comparable — you are not rewarded for switching a rule off, only
-released from it.
+in `.awesome-readme.json`. Disabled rules leave the denominator, so switching
+off a rule you fail raises the score. That is the reason the list lives in a
+committed file, where the next person can see the decision.
 
 `readme_lint.py --explain <RULE>` prints the reasoning behind any single rule.

@@ -25,7 +25,8 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Callable, Dict, List, Optional, Sequence, Set
+from urllib.parse import unquote
 
 __version__ = "1.0.0"
 
@@ -89,6 +90,8 @@ class Doc:
     fences: List[Fence] = field(default_factory=list)
     prose: str = ""
     prose_lines: List[str] = field(default_factory=list)
+    front_matter_end: int = 0                 # last line of a leading YAML block
+    setext_underlines: Set[int] = field(default_factory=set)
 
     def in_fence(self, line: int) -> bool:
         return any(f.start <= line <= f.end for f in self.fences)
@@ -137,7 +140,9 @@ class Doc:
 # ---------------------------------------------------------------------------
 
 _SLUG_STRIP = re.compile(r"[^\w\- ]", re.UNICODE)
-_MD_INLINE = re.compile(r"(\*\*|__|\*|_|`|~~)")
+# Emphasis markers, but not an underscore inside a word: GitHub keeps
+# `max_retries` as-is in the anchor.
+_MD_INLINE = re.compile(r"(\*\*|\*|`|~~|(?<!\w)_+|_+(?!\w))")
 
 
 def write_text_lf(path: Path, text: str) -> None:
@@ -171,7 +176,8 @@ SECTION_VOCAB: Dict[str, Sequence[str]] = {
     "requirements": ("requirements", "prerequisites", "prereqs", "before you start",
                      "supported platforms", "compatibility", "system requirements"),
     "install": ("install", "installation", "installing", "setup", "set up",
-                "get started", "getting started"),
+                "get started", "getting started", "deploy", "deployment",
+                "deploying"),
     "quickstart": ("quickstart", "quick start", "usage", "using it", "examples",
                    "example", "basic usage", "first run", "try it", "api"),
     "config": ("config", "configuration", "configuring", "settings", "options",
@@ -249,9 +255,17 @@ def _attrs(blob: str) -> Dict[str, str]:
 
 
 def parse(path: Path, root: Path) -> Doc:
-    raw = path.read_text(encoding="utf-8", errors="replace")
+    # utf-8-sig: a BOM left on line 1 would hide the H1 from every rule.
+    raw = path.read_text(encoding="utf-8-sig", errors="replace")
     lines = raw.splitlines()
     doc = Doc(path=path, root=root, raw=raw, lines=lines)
+
+    # YAML front matter is metadata, not content; GitHub renders it as a table.
+    if lines and lines[0].strip() == "---":
+        for j in range(1, min(len(lines), 200)):
+            if lines[j].strip() in ("---", "..."):
+                doc.front_matter_end = j + 1
+                break
 
     # Fences first: everything else must know what to skip.
     fence_open: Optional[tuple] = None
@@ -270,14 +284,14 @@ def parse(path: Path, root: Path) -> Doc:
 
     prose_lines: List[str] = []
     for i, line in enumerate(lines, start=1):
-        prose_lines.append("" if doc.in_fence(i) else line)
+        hidden = doc.in_fence(i) or i <= doc.front_matter_end
+        prose_lines.append("" if hidden else line)
     doc.prose_lines = prose_lines
     doc.prose = "\n".join(prose_lines)
 
     # ATX headings
-    setext_consumed = set()
     for i, line in enumerate(lines, start=1):
-        if doc.in_fence(i):
+        if doc.in_fence(i) or i <= doc.front_matter_end:
             continue
         m = _RE_ATX.match(line)
         if m:
@@ -289,7 +303,7 @@ def parse(path: Path, root: Path) -> Doc:
             if not _RE_ATX.match(prev) and not doc.in_fence(i - 1) and prev.strip() != "":
                 lvl = 1 if line.strip().startswith("=") else 2
                 doc.headings.append(Heading(lvl, prev.strip(), i - 1))
-                setext_consumed.add(i)
+                doc.setext_underlines.add(i)
 
     # HTML headings (centered hero titles live here)
     for m in _RE_HTML_H.finditer(doc.prose):
@@ -434,7 +448,7 @@ class Config:
             p = root / name
             if p.is_file():
                 try:
-                    data = json.loads(p.read_text(encoding="utf-8"))
+                    data = json.loads(p.read_text(encoding="utf-8-sig"))
                 except (ValueError, OSError):
                     data = {}
                 break
@@ -478,6 +492,7 @@ PLACEHOLDER_PATTERNS = (
     r"your-project-name", r"YOUR_?USERNAME", r"<your[- ]", r"\[insert ",
     r"coming soon", r"under construction", r"project[-_ ]title",
     r"\bREPLACE_ME\b", r"example\.com/your",
+    r"(?<![$\w])\{\{[^{}\n]*\}\}",        # template slots, not ${{ }} expressions
 )
 
 SUPERLATIVES = (
@@ -497,16 +512,6 @@ def is_badge(img: Image) -> bool:
     if re.search(r"/actions/workflows/[^/]+/badge\.svg", src):
         return True  # GitHub's native Actions badge; renders for private repos
     return any(h in src for h in BADGE_HOSTS)
-
-
-def hero_region(doc: Doc) -> str:
-    """Everything before the first H2, or the first 60 lines - whichever is shorter."""
-    end = len(doc.lines)
-    for h in doc.headings:
-        if h.level == 2:
-            end = h.line - 1
-            break
-    return "\n".join(doc.lines[:min(end, 80)])
 
 
 def hero_line_count(doc: Doc) -> int:
@@ -530,7 +535,8 @@ def resolve_relative(doc: Doc, target: str) -> Optional[Path]:
     t = target.split("#", 1)[0].split("?", 1)[0]
     if not t:
         return None
-    t = t.replace("\\", "/")
+    # Decoded before the confinement check below, so %2e%2e is caught too.
+    t = unquote(t).replace("\\", "/")
     try:
         if t.startswith("/"):
             resolved = (doc.root / t.lstrip("/")).resolve()
@@ -677,7 +683,8 @@ def _hero_visual(doc: Doc, cfg: Config) -> List[Finding]:
 def _hero_rule(doc: Doc, cfg: Config) -> List[Finding]:
     hero = hero_line_count(doc)
     for i, line in enumerate(doc.lines[:hero], start=1):
-        if re.match(r"^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$", line) and not doc.in_fence(i):
+        if (re.match(r"^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$", line) and not doc.in_fence(i)
+                and i > doc.front_matter_end and i not in doc.setext_underlines):
             if i > 4:
                 return []
     return [Finding("HERO006", INFO, "No horizontal rule closing the hero.",
@@ -1132,7 +1139,8 @@ def _mec_heading_order(doc: Doc, cfg: Config) -> List[Finding]:
 def _mec_prompt_chars(doc: Doc, cfg: Config) -> List[Finding]:
     out = []
     for f in doc.fences:
-        if f.lang.lower() not in ("sh", "bash", "zsh", "shell", "console", ""):
+        # `console` is excluded: it is the tag that says "prompts are shown".
+        if f.lang.lower() not in ("sh", "bash", "zsh", "shell", ""):
             continue
         body = doc.lines[f.start:f.end - 1]
         cmds = [b for b in body if b.strip()]
@@ -1437,8 +1445,39 @@ def render(report: Report, cfg: Config, colour: bool = True) -> str:
     return "\n".join(out)
 
 
+RUBRIC_HEADER = """\
+<!-- Generated by: python3 scripts/readme_lint.py --rules > docs/rubric.md -->
+<!-- Do not edit by hand; edit the rule definitions in scripts/readme_lint.py. -->
+"""
+
+RUBRIC_FOOTER = """
+## Levels
+
+| Level | Effect on the score | Effect on `--strict` |
+|---|---|---|
+| `error` | the rule's full weight is lost | exit 1 |
+| `warn` | the rule's full weight is lost | — |
+| `info` | 40% of the rule's weight is lost | — |
+
+A rule that produces only `info` findings still earns most of its weight, which
+is why a good README lands in the nineties rather than at 100. The last few
+points are suggestions, not defects.
+
+## Turning a rule off
+
+```json
+{ "disable": ["HERO005", "DEP004"] }
+```
+
+in `.awesome-readme.json`. Disabled rules leave the denominator, so switching
+off a rule you fail raises the score. That is the reason the list lives in a
+committed file, where the next person can see the decision.
+
+`readme_lint.py --explain <RULE>` prints the reasoning behind any single rule."""
+
+
 def render_rules() -> str:
-    out = ["# readme-lint rubric (v%s)" % __version__, ""]
+    out = [RUBRIC_HEADER, "# readme-lint rubric (v%s)" % __version__, ""]
     total = sum(r.weight for r in RULES)
     out.append("%d rules, %d weighted points." % (len(RULES), total))
     out.append("")
@@ -1454,6 +1493,7 @@ def render_rules() -> str:
             prof = "all" if r.profiles is None else ", ".join(r.profiles)
             out.append("| `%s` | %d | %s | %s |" % (r.id, r.weight, prof, r.title))
         out.append("")
+    out.append(RUBRIC_FOOTER)
     return "\n".join(out)
 
 

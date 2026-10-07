@@ -13,6 +13,10 @@ wants to know what to fix first, not which tool found it.
 
 Resolve this once. `$TOOLKIT` below is whichever of these exists:
 
+Docs are in `$TOOLKIT/../docs/` and templates in `$TOOLKIT/../templates/`.
+The commands below say `python3`; where that is missing, as it often is on
+Windows, use `python` or `py -3`.
+
 - plugin install — `${CLAUDE_PLUGIN_ROOT}/scripts`
 - user install — the `scripts/` directory beside this `SKILL.md`
 
@@ -115,7 +119,7 @@ maintainer cannot check.
 
 ## Reference
 
-- [SPEC.md](../../docs/SPEC.md) — the pattern, block by block
-- [voice.md](../../docs/voice.md) — the prose rules pass 2 applies
-- [rubric.md](../../docs/rubric.md) — every rule, its weight and its reason
+- `$TOOLKIT/../docs/SPEC.md` — the pattern, block by block
+- `$TOOLKIT/../docs/voice.md` — the prose rules pass 2 applies
+- `$TOOLKIT/../docs/rubric.md` — every rule, its weight and its reason
 - `python3 $TOOLKIT/readme_lint.py --explain <RULE>` — one rule's reasoning

@@ -19,6 +19,10 @@ would fit any project, and duplication.
 `$TOOLKIT` is `${CLAUDE_PLUGIN_ROOT}/scripts` (plugin install) or the `scripts/`
 directory beside this `SKILL.md` (user install).
 
+Docs are in `$TOOLKIT/../docs/` and templates in `$TOOLKIT/../templates/`.
+The commands below say `python3`; where that is missing, as it often is on
+Windows, use `python` or `py -3`.
+
 ## 1. Inventory before you touch anything
 
 Read the whole file and write down, for yourself:
@@ -44,7 +48,7 @@ Note the score. You will quote both numbers at the end.
 
 ## 3. Restructure
 
-Move the existing content into the block order in [SPEC.md](../../docs/SPEC.md).
+Move the existing content into the block order in `$TOOLKIT/../docs/SPEC.md`.
 Most READMEs already have most of the content and have it in the wrong order —
 features before install, install before requirements, licence buried in the
 middle.

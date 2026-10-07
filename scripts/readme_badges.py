@@ -12,7 +12,7 @@ it reports on - the two rules that separate a status line from decoration.
     readme_badges.py                       # detect and print the row
     readme_badges.py --style for-the-badge
     readme_badges.py --only ci,license,version
-    readme_badges.py --format html         # centred <p> block (default: markdown)
+    readme_badges.py --format markdown     # one plain line (default: centred <p>)
     readme_badges.py --list                # every badge it knows how to build
     readme_badges.py --check               # report badges in README.md it cannot back
 """
@@ -50,7 +50,7 @@ CATALOG: Dict[str, dict] = {
     "license": {
         "label": "License",
         "img": SHIELDS + "/github/license/{owner}/{repo}?style={style}",
-        "href": "LICENSE",
+        "href": "{license_file}",
         "alt": "License",
         "needs": "license",
     },
@@ -169,7 +169,7 @@ def detect(root: Path) -> dict:
 
     branch = _git(root, "symbolic-ref", "--quiet", "--short", "HEAD")
     head = _git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
-    info["branch"] = (head.split("/")[-1] if head else branch) or "main"
+    info["branch"] = (head.split("/", 1)[-1] if head else branch) or "main"
 
     wf_dir = root / ".github" / "workflows"
     if wf_dir.is_dir():
@@ -180,8 +180,11 @@ def detect(root: Path) -> dict:
             info["workflow"] = chosen[0].name
             info["needs"].add("workflow")
 
-    if any((root / n).is_file() for n in ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING")):
-        info["needs"].add("license")
+    for name in ("LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"):
+        if (root / name).is_file():
+            info["license_file"] = name
+            info["needs"].add("license")
+            break
 
     pkg_json = root / "package.json"
     if pkg_json.is_file():
@@ -230,7 +233,7 @@ def detect(root: Path) -> dict:
 def build(keys: Sequence[str], info: dict, style: str, fmt: str) -> str:
     fields = {"owner": info["owner"], "repo": info["repo"], "branch": info["branch"],
               "workflow": info["workflow"] or "ci.yml", "pkg": info["pkg"] or info["repo"],
-              "style": style}
+              "license_file": info.get("license_file") or "LICENSE", "style": style}
     rows: List[str] = []
     for key in keys:
         spec = CATALOG.get(key)

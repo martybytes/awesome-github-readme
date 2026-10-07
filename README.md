@@ -118,10 +118,11 @@ Then in Claude Code:
 
 ```text
 /plugin marketplace add ./awesome-github-readme
-/plugin install awesome-github-readme@awesome-github-readme
+/plugin install awesome-github-readme@martybytes
 ```
 
-The plugin registers its own hooks; nothing goes into `settings.json`.
+`martybytes` is the marketplace name from `.claude-plugin/marketplace.json`, not
+the repository name. The plugin registers its own hooks; nothing goes into `settings.json`.
 </details>
 
 <details>
@@ -260,8 +261,9 @@ uninstalling anything.
 - **Anchor and relative-link resolution** against the working tree `MEC001`
   `MEC002`. Anchor rot is the defect that renders correctly, looks fine, and
   lands every reader at the top of the page.
-- **Disabled rules stay in the denominator**, so the score is still comparable —
-  you are released from a rule, not rewarded for switching it off.
+- **Disabled rules leave the denominator**, so switching off a rule you fail
+  raises the score. That is why `disable` lives in a committed file, where the
+  next person can see the decision, rather than in a flag.
 - **`--json`** emits one record: score, grade, per-category weights, and every
   finding with its line and its fix.
 </details>
@@ -283,11 +285,11 @@ uninstalling anything.
 <details>
 <summary><b>The skills and the agent</b></summary>
 
-- **`/readme-audit`** runs the linter, then does the six things it cannot: read
+- **`/readme-audit`** runs the linter, then does the seven things it cannot: read
   the tagline with the title covered, check whose problem the document opens on,
   test whether each claim is falsifiable, judge whether the rationale is real,
-  look for admitted limitations, and follow the install section literally to find
-  where a stranger has to guess.
+  look for admitted limitations, follow the install section literally to find
+  where a stranger has to guess, and check the page is still current.
 - **`/readme-init`** derives what it can from the repository — the CI workflow is
   the authoritative list of test commands, because it is the only description of
   a project that is executed — and asks only the three questions no repository
@@ -297,8 +299,9 @@ uninstalling anything.
   and walks that inventory afterwards. The parenthetical caveat about a platform
   that half-works is the most valuable sentence in most READMEs and the easiest
   to lose in a rewrite.
-- **`readme-reviewer`** is the same prose review as a subagent with no write
-  tools, for a second opinion that cannot quietly edit the file.
+- **`readme-reviewer`** is the same prose review as a subagent without the
+  Write, Edit or NotebookEdit tools, for a second opinion that reports rather
+  than rewrites.
 </details>
 
 <details>
@@ -327,7 +330,7 @@ blocks a commit on somebody else's machine is a linter people uninstall.
 - **[badges.md](docs/badges.md)** — the catalogue, and what is excluded on purpose.
 - **[visuals.md](docs/visuals.md)** — VHS, Mermaid, theme-aware screenshots, and
   why the recording has to be reproducible from a committed script.
-- **[antipatterns.md](docs/antipatterns.md)** — twelve common ones, each with the
+- **[antipatterns.md](docs/antipatterns.md)** — thirteen common ones, each with the
   reader it costs.
 - **[ci.md](docs/ci.md)** — gates, exit codes, the JSON contract, and recipes for
   Actions, GitLab, Azure and `pre-commit`.
@@ -371,7 +374,8 @@ jobs:
       - run: python tools/readme_badges.py --check
 ```
 
-`install.py --project . --ci` writes a working version of that. It fetches the
+`install.py --project . --ci` writes the lint step of that, with the floor taken
+from `min_score` in `.awesome-readme.json` rather than a flag. It fetches the
 linter with `curl` for convenience; **vendoring the file into your repo instead
 is one commit and removes a supply-chain dependency** — see
 [SECURITY.md](SECURITY.md#supply-chain).
@@ -390,8 +394,9 @@ READMEs written by strangers. So, plainly:
 - **No network access, in any script.** Nothing is uploaded, no telemetry, and
   badge URLs are compared against the working tree rather than fetched. Verify
   it yourself: `grep -rE '^\s*(import|from)\s+(urllib|http|socket|requests)' scripts/`
-- **One subprocess, and it is `git`** — `git -C <root> remote get-url origin`,
-  passed as an argument list with a timeout, never a shell string.
+- **The only subprocess is `git`** — `remote get-url origin` and two
+  `symbolic-ref` calls in `readme_badges.py`, each passed as an argument list
+  with a timeout, never a shell string.
 - **It reads four things**: the README, `.awesome-readme.json`, your package
   manifest, and the *filenames* in `.github/workflows/`. Links are checked with
   `exists()` and never opened.
@@ -401,7 +406,9 @@ READMEs written by strangers. So, plainly:
 - **Input cost is bounded.** Unbounded link regexes let 50k unclosed brackets
   cost 8.7 s; the capped classes make it 0.18 s, and
   `test_pathological_input_stays_fast` keeps it there.
-- **Only `install.py` writes outside its own directory.** It merges into
+- **Only `install.py` writes outside its own directory**, and only
+  `readme_toc.py --write` rewrites the README it was pointed at. The installer
+  merges into
   `settings.json` after a dated backup, touching only entries tagged
   `"_source": "awesome-github-readme"`, so your other hooks survive and
   `--uninstall` removes exactly what it added. `--dry-run` shows you first.
@@ -458,7 +465,7 @@ python3 scripts/readme_badges.py --check
 ```
 
 Those four are what [CI](.github/workflows/ci.yml) runs, on Ubuntu, macOS and
-Windows, against Python 3.9 through 3.13 — the matrix matters here because the
+Windows, against Python 3.9 and 3.13 — the matrix matters here because the
 linter's whole claim is that it behaves identically on all of them.
 
 Two of those tests calibrate the rubric rather than the code: a fixture README

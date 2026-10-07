@@ -11,7 +11,8 @@ the entries and nothing else:
     <!-- /toc -->
 
 If the markers are absent, `--write` inserts them under an existing
-`## Contents` heading, or creates that heading before the first content H2.
+`## Contents` heading, or creates that heading before the second H2 (the
+first is usually the one-paragraph "what it is").
 
     readme_toc.py                     # print the list
     readme_toc.py --write             # update README.md in place
@@ -26,7 +27,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from readme_lint import (Doc, Heading, github_slug, parse, find_root,  # noqa: E402
@@ -45,12 +46,15 @@ def collect(doc: Doc, min_depth: int, max_depth: int,
     seen: dict = {}
     out: List[Tuple[int, str, str]] = []
     for h in doc.headings:
-        if h.html or h.level < min_depth or h.level > max_depth:
+        if h.html:
             continue
+        # GitHub numbers duplicates across every level, so count before filtering.
         slug = h.slug
         n = seen.get(slug, 0)
         seen[slug] = n + 1
         anchor = slug if n == 0 else "%s-%d" % (slug, n)
+        if h.level < min_depth or h.level > max_depth:
+            continue
         if slug in SKIP_SLUGS or slug in skip:
             continue
         text = re.sub(r"<[^>]+>", "", h.text).strip()
@@ -72,27 +76,53 @@ def render_nav(entries, limit: int = 6) -> str:
     return "<p align=\"center\">\n  " + " &middot;\n  ".join(parts) + "\n</p>"
 
 
+def fenced(lines: List[str]) -> Set[int]:
+    """Indexes of lines inside a code fence, so an example is never rewritten."""
+    out: Set[int] = set()
+    opener: Optional[str] = None
+    for i, line in enumerate(lines):
+        m = re.match(r"^\s{0,3}(`{3,}|~{3,})", line)
+        if opener is not None:
+            out.add(i)
+            if m and m.group(1)[0] == opener[0] and len(m.group(1)) >= len(opener):
+                opener = None
+        elif m:
+            out.add(i)
+            opener = m.group(1)
+    return out
+
+
 def splice(raw: str, block: str) -> Tuple[str, bool]:
     """Replace the region between the markers. Returns (text, changed)."""
-    pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.DOTALL)
     new_region = "%s\n\n%s\n\n%s" % (BEGIN, block, END)
-    if pattern.search(raw):
-        out = pattern.sub(lambda _m: new_region, raw, count=1)
+    lines = raw.splitlines()
+    skip = fenced(lines)
+    begin = next((i for i, line in enumerate(lines)
+                  if i not in skip and line.strip() == BEGIN), None)
+    end = None if begin is None else next(
+        (i for i in range(begin + 1, len(lines))
+         if i not in skip and lines[i].strip() == END), None)
+    if begin is not None and end is not None:
+        body = lines[:begin] + new_region.split("\n") + lines[end + 1:]
+        out = "\n".join(body) + ("\n" if raw.endswith("\n") else "")
         return out, out != raw
 
-    lines = raw.splitlines()
     # Under an existing Contents heading?
     for i, line in enumerate(lines):
+        if i in skip:
+            continue
         if re.match(r"^\s{0,3}#{2,3}\s+", line) and github_slug(
                 re.sub(r"^\s{0,3}#+\s+", "", line)) in SKIP_SLUGS:
             j = i + 1
-            while j < len(lines) and not re.match(r"^\s{0,3}#{1,6}\s+", lines[j]):
+            while j < len(lines) and (j in skip or not re.match(
+                    r"^\s{0,3}#{1,6}\s+", lines[j])):
                 j += 1
             body = lines[:i + 1] + ["", new_region, ""] + lines[j:]
             return "\n".join(body) + "\n", True
 
     # Otherwise: a new Contents heading before the second H2.
-    h2s = [i for i, line in enumerate(lines) if re.match(r"^\s{0,3}##\s+", line)]
+    h2s = [i for i, line in enumerate(lines)
+           if i not in skip and re.match(r"^\s{0,3}##\s+", line)]
     at = h2s[1] if len(h2s) > 1 else (h2s[0] if h2s else len(lines))
     body = lines[:at] + ["## Contents", "", new_region, ""] + lines[at:]
     return "\n".join(body) + "\n", True

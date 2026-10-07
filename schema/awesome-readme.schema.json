@@ -38,7 +38,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^[A-Z]{3}[0-9]{3}$"
+        "pattern": "^[A-Z]{3,4}[0-9]{3}$"
       },
       "description": "Rule ids to skip, e.g. [\"HERO005\", \"DEP004\"]."
     },

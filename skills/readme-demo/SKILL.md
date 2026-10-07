@@ -18,7 +18,11 @@ which is what makes it happen.
 ## Toolkit
 
 `$TOOLKIT` is `${CLAUDE_PLUGIN_ROOT}/scripts` (plugin install) or the `scripts/`
-directory beside this `SKILL.md`. Templates are in `$TOOLKIT/../templates/`.
+directory beside this `SKILL.md`.
+
+Docs are in `$TOOLKIT/../docs/` and templates in `$TOOLKIT/../templates/`.
+The commands below say `python3`; where that is missing, as it often is on
+Windows, use `python` or `py -3`.
 
 ## Pick the form
 
@@ -155,4 +159,4 @@ python3 $TOOLKIT/readme_lint.py README.md --no-colour
 `##`. `MEC001` will catch a `docs/demo.gif` that does not exist yet — tell the
 maintainer that finding is expected until they run the tape.
 
-More detail in [visuals.md](../../docs/visuals.md).
+More detail in `$TOOLKIT/../docs/visuals.md`.

@@ -132,7 +132,7 @@ something public.
 
 ## Supply chain
 
-`install.py --project --ci` generates a workflow that fetches the linter at run
+`install.py --project . --ci` generates a workflow that fetches the linter at run
 time:
 
 ```yaml

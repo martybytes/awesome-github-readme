@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -36,24 +37,36 @@ try:
 except Exception:                                   # never break the session
     sys.exit(0)
 
-README_NAMES = ("readme.md", "readme.markdown", "readme.rst", "readme")
+# Markdown only: an RST or plain-text README would fail every Markdown rule.
+README_NAMES = ("readme.md", "readme.markdown")
 MAX_FINDINGS = 8
 
-# `git commit` but not `git commit --help`, and not a commit inside a longer
-# read-only pipeline such as `git log --format=... commit`.
-_COMMIT_RE = re.compile(r"(^|[;&|]\s*)git\s+(?:-[^\s]+\s+|--\S+\s+)*commit\b")
+# `git commit` at the start of a command, after a separator or on a later
+# line, with any global options (`-C dir`, `-c k=v`) in between - but not
+# `git commit-tree`, and not a commit inside a read-only pipeline such as
+# `git log --format=... commit`. Group 1 is the commit's own arguments.
+_COMMIT_RE = re.compile(
+    r"(?:^|[;&|]\s*)git\s+(?:-[Cc]\s+\S+\s+|-\S+\s+)*commit(?![-\w])([^;&|\n]*)",
+    re.M)
+
+
+def asks_help(args: str) -> bool:
+    """True for `git commit --help`, not for `-m "mention --help"`."""
+    try:
+        words = shlex.split(args)
+    except ValueError:                              # unbalanced quotes
+        words = args.split()
+    return "--help" in words or "-h" in words
 
 
 def emit(event: str, context: str = "", decision: str = "",
-         reason: str = "", system: str = "") -> None:
+         reason: str = "") -> None:
     payload = {"hookEventName": event}
     if context:
         payload["additionalContext"] = context
     if decision:
         payload["permissionDecision"] = decision
         payload["permissionDecisionReason"] = reason
-    if system:
-        payload["systemMessage"] = system
     print(json.dumps({"hookSpecificOutput": payload}))
     sys.exit(0)
 
@@ -136,7 +149,8 @@ def on_pre_tool_use(data: dict) -> None:
     if (data.get("tool_name") or "") != "Bash":
         quiet()
     command = ((data.get("tool_input") or {}).get("command") or "")
-    if not _COMMIT_RE.search(command) or "--help" in command:
+    commits = [m.group(1) for m in _COMMIT_RE.finditer(command)]
+    if not commits or all(asks_help(args) for args in commits):
         quiet()
 
     cwd = Path(data.get("cwd") or ".")
@@ -193,7 +207,9 @@ def main() -> int:
     if not enabled():
         return 0
     try:
-        data = json.loads(sys.stdin.read() or "{}")
+        # Claude Code sends UTF-8; sys.stdin decodes with the locale's code
+        # page on Windows and would garble any non-ASCII path.
+        data = json.loads(sys.stdin.buffer.read().decode("utf-8") or "{}")
     except (ValueError, OSError):
         return 0
     handler = HANDLERS.get(data.get("hook_event_name") or "")

@@ -51,6 +51,13 @@ reader will be able to do afterwards.}}
 2. **[{{Doc}}]({{path}})** — {{what it gets you}}
 3. **[{{Doc}}]({{path}})** — {{what it gets you}}
 
+To read it offline, or preview a change before you open a pull request:
+
+```sh
+git clone https://github.com/{{OWNER}}/{{PROJECT}}
+{{the one command that serves the docs locally}}
+```
+
 ## How to use this
 
 | If you want to | Read |

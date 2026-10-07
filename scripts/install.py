@@ -34,9 +34,13 @@ from typing import List, Optional, Sequence
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_NAME = "awesome-github-readme"
+MARKETPLACE_NAME = "martybytes"  # "name" in .claude-plugin/marketplace.json
 MARKER = "awesome-github-readme"          # tags the hook entries we own
 
 SKILLS = ("readme-init", "readme-audit", "readme-polish", "readme-demo", "readme-badges")
+
+# What a skill reaches through $TOOLKIT/.. - see do_user.
+SHARED_DIRS = ("scripts", "docs", "templates")
 
 PROFILES = ("cli", "library", "service", "app", "docs", "minimal")
 
@@ -92,10 +96,20 @@ def write_text_lf(path: Path, text: str) -> None:
         fh.write(text)
 
 
+def shell_path(path: str) -> str:
+    """A path quoted for the shell a hook command runs in.
+
+    Claude Code runs hook commands through bash, Git Bash included on
+    Windows, and bash eats unquoted backslashes, so a Windows interpreter
+    path turns into a command that does not exist. Forward slashes inside
+    double quotes work on every platform.
+    """
+    return '"%s"' % path.replace("\\", "/")
+
+
 def python_cmd() -> str:
     """The interpreter to put in a hook command, quoted for a shell."""
-    exe = sys.executable or "python3"
-    return '"%s"' % exe if " " in exe else exe
+    return shell_path(sys.executable) if sys.executable else "python3"
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +126,7 @@ def hook_entries(script_ref: str) -> dict:
     cmd = "%s %s" % (python_cmd(), script_ref)
     return {
         "PostToolUse": [{
-            "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+            "matcher": "Write|Edit|MultiEdit",
             "hooks": [{"type": "command", "command": cmd, "timeout": 15}],
             "_source": MARKER,
         }],
@@ -175,7 +189,8 @@ Install as a Claude Code plugin - the path that keeps updates working:
   Then: /readme-audit, /readme-init, /readme-polish, /readme-demo, /readme-badges
 
 The plugin registers its hooks itself; nothing needs to go into settings.json.
-""" % (repo, PLUGIN_NAME, PLUGIN_NAME, PLUGIN_NAME, PLUGIN_NAME, PLUGIN_NAME))
+""" % (repo, PLUGIN_NAME, MARKETPLACE_NAME, PLUGIN_NAME, PLUGIN_NAME,
+       MARKETPLACE_NAME))
     return 0
 
 
@@ -211,8 +226,8 @@ def do_user(dry: bool, link: bool) -> int:
         dest.parent.mkdir(parents=True, exist_ok=True)
         # A plugin skill reaches the toolkit through ${CLAUDE_PLUGIN_ROOT}, which
         # is not set for a ~/.claude skill. Every install shape therefore has to
-        # end with a `scripts/` beside the SKILL.md, or the skill's own
-        # instructions point at nothing.
+        # end with `scripts/`, `docs/` and `templates/` beside the SKILL.md, or
+        # the skill's own instructions point at nothing.
         if link:
             try:
                 dest.mkdir(parents=True)
@@ -222,8 +237,9 @@ def do_user(dry: bool, link: bool) -> int:
                 for entry in src.iterdir():
                     (dest / entry.name).symlink_to(
                         entry, target_is_directory=entry.is_dir())
-                (dest / "scripts").symlink_to(PLUGIN_ROOT / "scripts",
-                                              target_is_directory=True)
+                for shared in SHARED_DIRS:
+                    (dest / shared).symlink_to(PLUGIN_ROOT / shared,
+                                               target_is_directory=True)
                 say("linked skill %s" % name, "add")
                 continue
             except OSError:
@@ -232,8 +248,9 @@ def do_user(dry: bool, link: bool) -> int:
                 if dest.exists():
                     shutil.rmtree(dest, ignore_errors=True)
         shutil.copytree(src, dest)
-        shutil.copytree(PLUGIN_ROOT / "scripts", dest / "scripts",
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        for shared in SHARED_DIRS:
+            shutil.copytree(PLUGIN_ROOT / shared, dest / shared,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         say("installed skill %s" % name, "add")
 
     agents_src = PLUGIN_ROOT / "agents"
@@ -249,9 +266,7 @@ def do_user(dry: bool, link: bool) -> int:
 
     settings_path = home / "settings.json"
     settings = read_json(settings_path)
-    hook_script = str(PLUGIN_ROOT / "scripts" / "readme_hook.py")
-    if " " in hook_script:
-        hook_script = '"%s"' % hook_script
+    hook_script = shell_path(str(PLUGIN_ROOT / "scripts" / "readme_hook.py"))
     merged = merge_hooks(settings, hook_entries(hook_script))
     if not dry:
         b = backup(settings_path)
@@ -278,10 +293,17 @@ README=$(ls README.md readme.md README.markdown 2>/dev/null | head -n 1) || exit
 [ -n "$README" ] || exit 0
 LINT="%s"
 [ -f "$LINT" ] || exit 0
+PY=
+for p in python3 python py; do
+  if "$p" -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1; then
+    PY=$p; break
+  fi
+done
+[ -n "$PY" ] || exit 0
 if grep -q '"strict"[[:space:]]*:[[:space:]]*true' .awesome-readme.json 2>/dev/null; then
-  exec python3 "$LINT" "$README" --strict
+  exec "$PY" "$LINT" "$README" --strict
 fi
-python3 "$LINT" "$README" || true
+"$PY" "$LINT" "$README" || true
 exit 0
 """
 
@@ -292,9 +314,13 @@ on:
     branches: [%(branch)s]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -306,11 +332,14 @@ jobs:
           curl -fsSL -o .readme-tools/readme_lint.py \\
             https://raw.githubusercontent.com/martybytes/awesome-github-readme/main/scripts/readme_lint.py
       - name: Lint README
-        run: python .readme-tools/readme_lint.py README.md --no-colour --min-score %(min_score)d
+        # The floor is min_score in .awesome-readme.json, the same one the
+        # commit hook reads; there is deliberately no --min-score here.
+        run: python .readme-tools/readme_lint.py README.md --no-colour
 """
 
 
-def do_project(root: Path, profile: str, strict: bool, min_score: int,
+def do_project(root: Path, profile: Optional[str], strict: Optional[bool],
+               min_score: int,
                ci: bool, git_hook: bool, dry: bool) -> int:
     root = root.expanduser().resolve()
     if not root.is_dir():
@@ -324,10 +353,18 @@ def do_project(root: Path, profile: str, strict: bool, min_score: int,
     cfg.setdefault("$schema",
                    "https://raw.githubusercontent.com/martybytes/"
                    "awesome-github-readme/main/schema/awesome-readme.schema.json")
-    cfg["profile"] = profile
-    cfg["strict"] = strict
+    # Only flags actually passed overwrite; a bare re-run keeps the repo's choices.
+    if profile is not None:
+        cfg["profile"] = profile
+    if strict is not None:
+        cfg["strict"] = strict
+    cfg.setdefault("profile", "cli")
+    cfg.setdefault("strict", False)
+    profile, strict = cfg["profile"], cfg["strict"]
     if min_score:
         cfg["min_score"] = min_score
+    elif ci:
+        cfg.setdefault("min_score", 70)
     cfg.setdefault("disable", [])
     cfg.setdefault("require", [])
     cfg.setdefault("allow_badges", [])
@@ -337,9 +374,7 @@ def do_project(root: Path, profile: str, strict: bool, min_score: int,
     # 2. Project-local hooks, so the check follows the repo not the machine.
     settings_path = root / ".claude" / "settings.json"
     settings = read_json(settings_path)
-    hook_script = str(PLUGIN_ROOT / "scripts" / "readme_hook.py")
-    if " " in hook_script:
-        hook_script = '"%s"' % hook_script
+    hook_script = shell_path(str(PLUGIN_ROOT / "scripts" / "readme_hook.py"))
     merged = merge_hooks(settings, hook_entries(hook_script))
     if not dry:
         b = backup(settings_path)
@@ -352,7 +387,7 @@ def do_project(root: Path, profile: str, strict: bool, min_score: int,
     if git_hook:
         hooks_dir = root / ".githooks"
         target = hooks_dir / "pre-commit"
-        lint_path = str(PLUGIN_ROOT / "scripts" / "readme_lint.py")
+        lint_path = (PLUGIN_ROOT / "scripts" / "readme_lint.py").as_posix()
         if dry:
             say("would write %s" % target, "add")
         else:
@@ -373,9 +408,9 @@ def do_project(root: Path, profile: str, strict: bool, min_score: int,
         head = root / ".git" / "HEAD"
         if head.is_file():
             text = head.read_text(encoding="utf-8", errors="replace").strip()
-            if text.startswith("ref:"):
-                branch = text.rsplit("/", 1)[-1]
-        body = WORKFLOW % {"branch": branch, "min_score": min_score or 70}
+            if text.startswith("ref: refs/heads/"):
+                branch = text.split("refs/heads/", 1)[1]
+        body = WORKFLOW % {"branch": branch}
         if dry:
             say("would write %s" % wf, "add")
         elif wf.is_file():
@@ -410,6 +445,14 @@ def do_uninstall(user: bool, project: Optional[Path], dry: bool) -> int:
                 else:
                     shutil.rmtree(dest)
                     say("removed skill %s" % name, "skip")
+        for md in (PLUGIN_ROOT / "agents").glob("*.md"):
+            dest = home / "agents" / md.name
+            if dest.is_file():
+                if dry:
+                    say("would remove agent %s" % md.stem, "skip")
+                else:
+                    dest.unlink()
+                    say("removed agent %s" % md.stem, "skip")
         sp = home / "settings.json"
         if sp.is_file():
             if not dry:
@@ -465,8 +508,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="with --user, symlink the skills instead of copying")
     ap.add_argument("--project", metavar="PATH",
                     help="give one repository its own rubric, hooks and CI job")
-    ap.add_argument("--profile", choices=PROFILES, default="cli")
-    ap.add_argument("--strict", action="store_true",
+    ap.add_argument("--profile", choices=PROFILES,
+                    help="with --project, the README profile (default cli)")
+    ap.add_argument("--strict", action="store_true", default=None,
                     help="with --project, make the commit gate blocking")
     ap.add_argument("--min-score", type=int, default=0,
                     help="with --project, the score CI requires")

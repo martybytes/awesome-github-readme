@@ -730,3 +730,85 @@ def test_url_inside_code_span_is_not_bare(tmp_path):
     assert "MEC007" not in rule_ids(lint(text, tmp_path))
     text = "# x\n\nSee http://example.com/page for more.\n"
     assert "MEC007" in rule_ids(lint(text, tmp_path))
+
+
+# ---------------------------------------------------------------------------
+# Regressions
+# ---------------------------------------------------------------------------
+
+
+def test_slug_keeps_underscores_inside_words():
+    assert rl.github_slug("max_retries") == "max_retries"
+    assert rl.github_slug("_emphasis_ here") == "emphasis-here"
+
+
+def test_bom_does_not_hide_the_h1(tmp_path):
+    path = tmp_path / "README.md"
+    path.write_bytes(b"\xef\xbb\xbf# Title\n\nA tagline.\n")
+    doc = rl.parse(path, tmp_path)
+    assert [h.text for h in doc.h1s] == ["Title"]
+
+
+def test_front_matter_is_not_a_heading(tmp_path):
+    path = tmp_path / "README.md"
+    path.write_text("---\ntitle: x\ndescription: y\n---\n\n# Title\n", encoding="utf-8")
+    doc = rl.parse(path, tmp_path)
+    assert [(h.level, h.text) for h in doc.headings] == [(1, "Title")]
+
+
+def test_percent_encoded_link_resolves(tmp_path):
+    (tmp_path / "My File.md").write_text("x", encoding="utf-8")
+    report = lint("# x\n\nSee [doc](My%20File.md).\n", tmp_path)
+    assert "MEC001" not in rule_ids(report)
+
+
+def test_template_slots_are_placeholders(tmp_path):
+    assert "HYG001" in rule_ids(lint("# x\n\n{{TAGLINE}}\n", tmp_path))
+    assert "HYG001" not in rule_ids(lint("# x\n\nUse `${{ secrets.TOKEN }}`.\n", tmp_path))
+
+
+def test_toc_splice_leaves_fenced_markers_alone():
+    raw = ("# x\n\n```markdown\n<!-- toc -->\nexample\n<!-- /toc -->\n```\n\n"
+           "## A\n\n<!-- toc -->\nold\n<!-- /toc -->\n")
+    out, changed = readme_toc.splice(raw, "- [A](#a)")
+    assert changed
+    assert "<!-- toc -->\nexample\n<!-- /toc -->" in out
+    assert "old" not in out
+
+
+def test_toc_numbers_duplicates_across_levels(tmp_path):
+    path = tmp_path / "README.md"
+    path.write_text("# x\n\n## Intro\n\n### Usage\n\n## Usage\n", encoding="utf-8")
+    doc = rl.parse(path, tmp_path)
+    anchors = [a for _, _, a in readme_toc.collect(doc, 2, 2)]
+    assert anchors == ["intro", "usage-1"]
+
+
+@pytest.mark.parametrize("command, fires", [
+    ("git commit -m x", True),
+    ("git -C /repo commit -m x", True),
+    ("git -c user.name=x commit", True),
+    ("git add .\ngit commit -m y", True),
+    ('git commit -m "document --help flag"', True),
+    ("git commit-tree abc", False),
+    ("git log --format=x commit", False),
+    ("git commit --help", False),
+])
+def test_hook_commit_detection(command, fires):
+    import readme_hook
+    commits = [m.group(1) for m in readme_hook._COMMIT_RE.finditer(command)]
+    detected = bool(commits) and not all(readme_hook.asks_help(a) for a in commits)
+    assert detected is fires
+
+
+def test_installer_hook_command_survives_bash(tmp_path):
+    import install
+    cmd = install.hook_entries(install.shell_path(r"C:\Program Files\x\readme_hook.py"))
+    command = cmd["PreToolUse"][0]["hooks"][0]["command"]
+    assert "\\" not in command
+    assert command.endswith('"C:/Program Files/x/readme_hook.py"')
+
+
+def test_rubric_is_fully_generated():
+    on_disk = (ROOT / "docs" / "rubric.md").read_text(encoding="utf-8").strip()
+    assert on_disk == rl.render_rules().strip()

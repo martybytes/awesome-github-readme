@@ -15,8 +15,11 @@ is downstream of that.
 ## What you check
 
 The mechanical defects are already covered by `readme_lint.py`; do not duplicate
-it. Run it for the score if it is available, then spend your attention on the
-six things it cannot judge.
+it. Run it for the score if it is available —
+`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/readme_lint.py" README.md --no-colour` in
+a plugin install, `~/.claude/skills/readme-audit/scripts/readme_lint.py` in a
+user install (`python` where `python3` is missing) — then spend your attention
+on the six things it cannot judge.
 
 **1. The tagline, alone.** Cover the title. Read only the tagline. Say what the
 project is, who it is for, and how it differs from the obvious alternative. If

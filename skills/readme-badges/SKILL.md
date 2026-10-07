@@ -20,6 +20,10 @@ badge belongs:
 `$TOOLKIT` is `${CLAUDE_PLUGIN_ROOT}/scripts` (plugin install) or the `scripts/`
 directory beside this `SKILL.md`.
 
+Docs are in `$TOOLKIT/../docs/` and templates in `$TOOLKIT/../templates/`.
+The commands below say `python3`; where that is missing, as it often is on
+Windows, use `python` or `py -3`.
+
 ## Build the row
 
 ```sh
@@ -131,4 +135,4 @@ exactly the breakage nobody notices by reading:
 - run: python3 scripts/readme_badges.py --check
 ```
 
-Full catalogue and reasoning: [badges.md](../../docs/badges.md).
+Full catalogue and reasoning: `$TOOLKIT/../docs/badges.md`.

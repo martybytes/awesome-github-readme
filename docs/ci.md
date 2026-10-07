@@ -57,8 +57,10 @@ without being told twice.
 
 ## GitHub Actions
 
-`install.py --project . --ci` writes a working job. Both forms below are
-equivalent apart from where the linter comes from.
+`install.py --project . --ci` writes a minimal job: the lint step only, with
+the floor taken from `min_score` in `.awesome-readme.json`, and the linter
+fetched from `main`. The two forms below go further — they add the TOC and badge
+checks — and differ only in where the linter comes from.
 
 **Vendored** — recommended. Commit `readme_lint.py` into your repo, and CI runs
 a version you reviewed:
@@ -222,10 +224,11 @@ python3 tools/readme_lint.py --json | python3 -c 'import json,sys; print(json.lo
 python3 tools/readme_lint.py --json \
   | python3 -c 'import json,sys; [print("README.md:%d: %s" % (f["line"], f["message"])) for f in json.load(sys.stdin)["findings"] if f["level"]=="error"]'
 
-# score every README in a monorepo
-find . -name README.md -not -path '*/node_modules/*' \
-  -exec python3 tools/readme_lint.py {} --json \; \
-  | python3 -c 'import json,sys; [print("%3d  %s" % (r["score"], r["path"])) for r in map(json.loads, sys.stdin)]'
+# score every README in a monorepo (--json is one multi-line record per run)
+find . -name README.md -not -path '*/node_modules/*' | while read -r f; do
+  python3 tools/readme_lint.py "$f" --json \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin); print("%3d  %s" % (r["score"], r["path"]))'
+done
 ```
 
 The `"file:line: message"` form is what GitHub, most editors and most log

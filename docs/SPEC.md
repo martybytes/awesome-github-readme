@@ -11,20 +11,21 @@ a rule has a machine check, its id is in the margin (`HERO002`); run
 
 - [The reader you are writing for](#the-reader-you-are-writing-for)
 - [Block 1: the hero](#block-1-the-hero)
-- [Block 2: what it is](#block-2-what-it-is)
-- [Block 3: the scope callout](#block-3-the-scope-callout)
-- [Block 4: contents](#block-4-contents)
-- [Block 5: requirements](#block-5-requirements)
-- [Block 6: install](#block-6-install)
-- [Block 7: quickstart](#block-7-quickstart)
-- [Block 8: configuring](#block-8-configuring)
-- [Block 9: the feature tour](#block-9-the-feature-tour)
-- [Block 10: architecture in 30 seconds](#block-10-architecture-in-30-seconds)
-- [Block 11: development](#block-11-development)
-- [Block 12: layout](#block-12-layout)
-- [Block 13: license](#block-13-license)
+- [Block 2: what it is](#block-2-what-it-is-ori001)
+- [Block 3: the scope callout](#block-3-the-scope-callout-ori003)
+- [Block 4: contents](#block-4-contents-ori004)
+- [Block 5: requirements](#block-5-requirements-onb003)
+- [Block 6: install](#block-6-install-onb001)
+- [Block 7: quickstart](#block-7-quickstart-onb002)
+- [Block 8: configuring](#block-8-configuring-onb006)
+- [Block 9: the feature tour](#block-9-the-feature-tour-dep001-dep002)
+- [Block 10: architecture in 30 seconds](#block-10-architecture-in-30-seconds-dep003)
+- [Block 11: development](#block-11-development-tru001)
+- [Block 12: layout](#block-12-layout-dep004)
+- [Block 13: license](#block-13-license-tru002)
 - [Profiles](#profiles)
 - [What this pattern deliberately omits](#what-this-pattern-deliberately-omits)
+- [Checking your work](#checking-your-work)
 
 ---
 
@@ -251,7 +252,7 @@ State what is optional, and what it costs to skip:
 
 One fenced, copy-pasteable command per variant, each in its own `<details>`.
 
-```markdown
+````markdown
 <details open>
 <summary><b>macOS</b> (Apple Silicon or Intel)</summary>
 
@@ -262,7 +263,7 @@ curl -fsSL https://raw.githubusercontent.com/owner/repo/main/install-mac.sh | ba
 Two System Settings toggles free `Ctrl+Space` before the keybindings work;
 [INSTALL.md § Reopen](INSTALL.md#4-reopen) walks through them.
 </details>
-```
+````
 
 Rules:
 
@@ -454,7 +455,7 @@ Then how they are enforced, and what CI covers that a laptop cannot:
 
 One fenced tree, one comment per top-level entry:
 
-```
+```text
 project/
 ├── src/         the library itself
 ├── bootstrap/   per-OS bootstraps
